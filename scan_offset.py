@@ -3,18 +3,18 @@
 """
 scan_offset.py — SteamID 偏移自动定位工具
 ==========================================
-在解密后的 USER_DATA_010 明文里搜索与存档文件夹名匹配的 8 字节序列，
+在解封装后的 USER_DATA_010 明文里搜索与存档文件夹名匹配的 8 字节序列，
 自动定位各 FromSoftware 游戏的真实 SteamID 偏移。
 
-用途：当 GAME_CONFIGS[*]["steam_id_offset"] 存疑时，用真实存档反推正确偏移。
+用途：当 GAME_CONFIGS[*].steam_id_offset 存疑时，用真实存档反推正确偏移。
 
 用法：
     python scan_offset.py [测试存档目录]
 
     默认测试存档目录：仓库根/可用于检验的存档
 """
-import sys
 import struct
+import sys
 from pathlib import Path
 
 # 强制 UTF-8 输出
@@ -24,15 +24,16 @@ try:
 except Exception:
     pass
 
-# 导入主力模块（脚本可放在项目根或别处，用绝对路径定位）
+# 导入主力包（脚本与包同目录）
 PROJECT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT))
 
-from fs_save_migrate import (
+from fs_save_migrator import (
     GAME_CONFIGS,
-    parse_bnd4_entries,
+    GameConfig,
+    decrypt_user_data_entry,
     find_user_data_010,
-    aes_decrypt,
+    parse_bnd4_entries,
     parse_folder_name_steamid,
 )
 
@@ -51,43 +52,14 @@ SUBDIR_TO_GAME_KEY = {
 }
 
 
-# ─── 核心：按 struct_type 解封装 USER_DATA entry ─────────────────────
-
-def decrypt_user_data_entry(data: bytes, entry: dict, config: dict):
-    """按 config["struct_type"] 解封装单个 entry，返回明文字节；失败返回 None。
-
-    三种结构（与 fs_save_migrate.GAME_CONFIGS 一致）：
-      - md5_iv_ct : [md5(16) | iv(16) | ct]  → iv=enc[16:32], ct=enc[32:]
-      - iv_ct     : [iv(16) | ct]            → iv=enc[0:16],  ct=enc[16:]
-      - plain     : 明文直接返回（ER/Sekiro）
-    """
-    enc = data[entry["offset"]: entry["offset"] + entry["size"]]
-    stype = config.get("struct_type", "md5_iv_ct")
-    if stype == "plain":
-        return enc
-    if stype == "iv_ct":           # [iv(16) | ct]（Nightreign）
-        iv, ct = enc[0:16], enc[16:]
-    else:                          # md5_iv_ct：[md5(16) | iv(16) | ct]
-        iv, ct = enc[16:32], enc[32:]
-    if len(iv) < 16:
-        return None
-    # 16 字节对齐（处理可能的 trailer）
-    ct = ct[: len(ct) - len(ct) % 16]
-    key = bytes.fromhex(config["aes_key_hex"])
-    try:
-        return aes_decrypt(ct, iv, key)
-    except Exception:
-        return None
-
-
 # ─── 核心：扫描单个存档 ─────────────────────────────────────────────
 
-def scan_one(sl2_path: Path, config: dict) -> dict:
-    """对单个 .sl2：解密 USER_DATA_010，在明文里搜目标 SteamID 的 8 字节序列。"""
+def scan_one(sl2_path: Path, config: GameConfig) -> dict:
+    """对单个 .sl2：解封装 USER_DATA_010，在明文里搜目标 SteamID 的 8 字节序列。"""
     result = {
         "file": sl2_path.name,
         "folder": sl2_path.parent.name,
-        "game": config["name"],
+        "game": config.name,
         "ok": False,
         "target_sid": None,
         "plain_len": 0,
@@ -103,15 +75,15 @@ def scan_one(sl2_path: Path, config: dict) -> dict:
         result["error"] = "读取失败: %s" % e
         return result
 
-    # 解密 USER_DATA_010
     entries = parse_bnd4_entries(data)
     entry = find_user_data_010(entries)
-    if not entry or entry["size"] == 0:
+    if not entry or entry.size == 0:
         result["error"] = "未找到 USER_DATA_010"
         return result
 
     # 解封装 USER_DATA_010（按 struct_type 三分支）
-    plain = decrypt_user_data_entry(data, entry, config)
+    plain = decrypt_user_data_entry(
+        data, entry, bytes.fromhex(config.aes_key_hex), config.struct_type)
     if plain is None:
         result["error"] = "解封装失败（结构/密钥不符或数据过短）"
         return result
@@ -149,10 +121,10 @@ def scan_one(sl2_path: Path, config: dict) -> dict:
     return result
 
 
-# ─── 深度扫描：解密所有 entry 搜索 ──────────────────────────────────
+# ─── 深度扫描：解封装所有 entry 搜索 ──────────────────────────────────
 
-def deep_scan_one(sl2_path: Path, config: dict) -> list:
-    """解密所有 USER_DATA entry，搜目标 SteamID64(8字节) 与 account_id(4字节)。
+def deep_scan_one(sl2_path: Path, config: GameConfig) -> list:
+    """解封装所有 USER_DATA entry，搜目标 SteamID64(8字节) 与 account_id(4字节)。
 
     account_id = SteamID64 - 0x0110000100000000 (SteamID32)。某些游戏可能存
     4 字节 account_id 而非完整 8 字节 SteamID64。
@@ -171,27 +143,28 @@ def deep_scan_one(sl2_path: Path, config: dict) -> list:
     base = 0x0110000100000000
     account_id = target - base
     acct_le = struct.pack("<I", account_id) if 0 <= account_id < 2**32 else None
+    key = bytes.fromhex(config.aes_key_hex)
+
+    def find_all(haystack: bytes, needle: bytes) -> list:
+        out, p = [], 0
+        while True:
+            i = haystack.find(needle, p)
+            if i == -1:
+                break
+            out.append(i)
+            p = i + 1
+        return out
 
     results = []
     for e in entries:
-        plain = decrypt_user_data_entry(data, e, config)
+        plain = decrypt_user_data_entry(data, e, key, config.struct_type)
         if plain is None:
             continue
 
-        def find_all(needle):
-            out, p = [], 0
-            while True:
-                i = plain.find(needle, p)
-                if i == -1:
-                    break
-                out.append(i)
-                p = i + 1
-            return out
-
         results.append({
-            "entry": e["name"], "plain_len": len(plain),
-            "hits64": find_all(tgt_le),
-            "hits32": find_all(acct_le) if acct_le else [],
+            "entry": e.name, "plain_len": len(plain),
+            "hits64": find_all(plain, tgt_le),
+            "hits32": find_all(plain, acct_le) if acct_le else [],
         })
     return results
 
@@ -218,7 +191,7 @@ def print_deep(results: list):
               % len(results))
 
 
-# ─── 格式化输出 ─────────────────────────────────────────────────────
+# ─── 格式化输出 ──────────────────────────────────────────────────────
 
 def fmt_hits(hits):
     """把命中偏移列表格式化为 0xHH 字符串"""
@@ -291,16 +264,16 @@ def main():
         config = GAME_CONFIGS[game_key]
 
         # folder 模式（DS2/DSR）：存档不内部绑定 SteamID，扫描无意义
-        if config.get("bind_mode", "internal") == "folder":
+        if config.bind_mode == "folder":
             print("\n" + "─" * 64)
-            print("  游戏 [%s] %s" % (game_key, config["name"]))
+            print("  游戏 [%s] %s" % (game_key, config.name))
             print("─" * 64)
             print("\n  [SKIP] folder 模式：存档不内部绑定 SteamID（靠文件夹名识别账号），无需扫描偏移")
             continue
 
         print("\n" + "─" * 64)
-        print("  游戏 [%s] %s" % (game_key, config["name"]))
-        print("  当前配置偏移: 0x%02X" % config["steam_id_offset"])
+        print("  游戏 [%s] %s" % (game_key, config.name))
+        print("  当前配置偏移: 0x%02X" % config.steam_id_offset)
         print("─" * 64)
 
         game_hits = []
@@ -324,12 +297,12 @@ def main():
                 off = game_hits[0]
                 summary[game_key] = off
                 print("\n  [游戏结论] %s steam_id_offset = 0x%02X (全部存档一致)"
-                      % (config["name"], off))
+                      % (config.name, off))
             else:
                 print("\n  [游戏结论] %s 多存档命中不一致: %s"
-                      % (config["name"], ", ".join("0x%02X" % h for h in game_hits)))
+                      % (config.name, ", ".join("0x%02X" % h for h in game_hits)))
         else:
-            print("\n  [游戏结论] %s 无唯一命中，需人工判断" % config["name"])
+            print("\n  [游戏结论] %s 无唯一命中，需人工判断" % config.name)
 
     # ─── 汇总 ───────────────────────────────────────────────────
     print("\n" + "=" * 64)
@@ -337,19 +310,19 @@ def main():
     print("=" * 64)
     for game_key in sorted(by_game.keys()):
         config = GAME_CONFIGS[game_key]
-        if config.get("bind_mode", "internal") == "folder":
+        if config.bind_mode == "folder":
             print("  [%s] %-28s folder 模式（不内部绑定 SteamID，偏移不适用）"
-                  % (game_key, config["name"]))
+                  % (game_key, config.name))
             continue
-        cur = config["steam_id_offset"]
+        cur = config.steam_id_offset
         if game_key in summary:
             new = summary[game_key]
             mark = "(已一致，无需改)" if new == cur else "  <-- 建议改"
             print("  [%s] %-28s 当前=0x%02X  建议=0x%02X  %s"
-                  % (game_key, config["name"], cur, new, mark))
+                  % (game_key, config.name, cur, new, mark))
         else:
             print("  [%s] %-28s 当前=0x%02X  (无定论，保留)"
-                  % (game_key, config["name"], cur))
+                  % (game_key, config.name, cur))
     print("=" * 64)
 
 

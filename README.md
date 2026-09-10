@@ -172,13 +172,14 @@ SteamID 均为 64 位整数、小端序 8 字节。
 
 ## 文件说明
 
-| 文件 | 说明 |
+| 文件/目录 | 说明 |
 |------|------|
-| `fs_save_migrate.py` | **通用版（推荐）** — 支持 6 款游戏、双向转换、自动 AES 加解密 |
-| `test_fs_save_migrate.py` | 单元测试（自研脚本，针对 `fs_save_migrate.py`） |
-| `test_real_archives.py` | 真实存档回归验证（需仓库根的 `可用于检验的存档/`，缺失时自动跳过） |
+| `fs_save_migrator/` | **Python 包（主体）** — games / crypto / bnd4 / migrate / cli 五个模块 |
+| `fs_save_migrate.py` | 兼容入口（旧命令 `python fs_save_migrate.py` 不变） |
 | `scan_offset.py` | 逆向辅助：对真实存档解密 `USER_DATA_010` 搜索 SteamID 字节序列，自动定位偏移 |
-| `README.md` | 本文档 |
+| `tests/` | pytest 套件：合成 BND4 全结构闭环 + 真实存档回归（存档缺失自动跳过） |
+| `pyproject.toml` | 打包与工具链配置（`pip install -e ".[dev]"` 后可用 `fs-save-migrator` 命令） |
+| `fs_save_migrator.spec` | PyInstaller 单文件 exe 打包配置（可选） |
 
 ### 依赖说明
 

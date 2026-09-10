@@ -1,0 +1,80 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fs-save-migrator"
+version = "2.0.0"
+description = "FromSoftware 存档通用迁移工具：正版 ↔ 学习版、跨 Steam 账号双向迁移 .sl2 存档（只改 SteamID，不动游戏数据）"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Davidipenny" }]
+keywords = ["fromsoftware", "dark-souls", "elden-ring", "sekiro", "save", "steam"]
+classifiers = [
+    "Environment :: Console",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Games/Entertainment",
+    "Topic :: Utilities",
+]
+dependencies = [
+    # AES-128-CBC 加解密；缺失时回退 PowerShell（仅 Windows，慢），
+    # 故为软依赖但默认安装
+    "cryptography>=41",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pyinstaller>=6",
+]
+
+[project.scripts]
+fs-save-migrator = "fs_save_migrator.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Davidipenny/fs存档转换器"
+
+[tool.hatch.build.targets.wheel]
+packages = ["fs_save_migrator"]
+
+[tool.hatch.build.targets.sdist]
+include = ["fs_save_migrator", "tests", "README.md", "scan_offset.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --basetemp=.pytest_tmp"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["原工具"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    "E501",   # 长行 tolerable（中文注释/字符串）
+    "UP031",  # 项目约定保留 printf 风格 % 格式化
+    "UP009",  # 保留 scan_offset.py 的 utf-8 声明（兼容性无害）
+]
+
+[tool.ruff.lint.per-file-ignores]
+# conftest.py / scan_offset.py 需先 sys.path.insert 再 import 包
+"tests/conftest.py" = ["E402"]
+"scan_offset.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.10"
+packages = ["fs_save_migrator"]
+strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+check_untyped_defs = true
