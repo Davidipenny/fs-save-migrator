@@ -17,6 +17,7 @@ from .crypto import HAS_CRYPTOGRAPHY, aes_decrypt, aes_encrypt
 from .games import GAME_CONFIGS, STRUCT_HEADER_LEN, GameConfig
 from .migrate import (
     extract_steam_id,
+    get_save_roots,
     is_valid_save_folder_name,
     parse_folder_name_steamid,
     patch_steam_id,
@@ -35,6 +36,7 @@ __all__ = [
     "decrypt_user_data_entry",
     "extract_steam_id",
     "find_user_data_010",
+    "get_save_roots",
     "is_valid_save_folder_name",
     "parse_bnd4_entries",
     "parse_folder_name_steamid",

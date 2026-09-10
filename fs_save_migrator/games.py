@@ -12,8 +12,10 @@
       folder    : 不内部绑定，靠文件夹名识别账号，迁移 = 纯复制
   - steam_id_offset  : SteamID 在明文内的偏移（小端 uint64）；folder 模式不适用
   - aes_key_hex      : 各游戏密钥不同；空字符串 = plain 结构无密钥
+  - alt_save_roots   : %APPDATA% 相应目录之外的候选存档根（相对 Documents/，
+                       如 DSR 的 "NBGI/DARK SOULS REMASTERED"），扫描时合并
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -29,6 +31,7 @@ class GameConfig:
     user_data_id: int       # USER_DATA_xxx 的 entry index（当前恒为 10）
     bind_mode: str          # internal | folder
     notes: str = ""
+    alt_save_roots: tuple[str, ...] = field(default=())
 
 
 GAME_CONFIGS: dict[str, GameConfig] = {
@@ -65,7 +68,9 @@ GAME_CONFIGS: dict[str, GameConfig] = {
         user_data_id=10,
         bind_mode="folder",  # 实测 0x08 是版本字段；靠 STEAMID3 文件夹识别，纯复制
         notes="实测(2026-08-06)：不内部绑定 SteamID（0x08 是版本字段），靠 STEAMID3 文件夹迁移，同 DS2。"
-              "实际存档在 Documents\\NBGI\\DARK SOULS REMASTERED(非%APPDATA%)，用手动模式",
+              "存档在 Documents\\NBGI\\DARK SOULS REMASTERED(非%APPDATA%)，已支持自动扫描",
+        # 实际存档在 Documents\NBGI\DARK SOULS REMASTERED（含 OneDrive 重定向变体）
+        alt_save_roots=("NBGI/DARK SOULS REMASTERED",),
     ),
     "4": GameConfig(
         name="Elden Ring (艾尔登法环)",

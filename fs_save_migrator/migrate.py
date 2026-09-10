@@ -174,14 +174,45 @@ def is_valid_save_folder_name(name: str) -> bool:
 
 # ─── 扫描存档 ──────────────────────────────────────────────────────────
 
+def _document_bases() -> list[Path]:
+    """候选 Documents 目录（含 OneDrive 重定向变体）。"""
+    bases: list[Path] = []
+    one_drive = os.environ.get("OneDrive")
+    if one_drive:
+        bases.append(Path(one_drive) / "Documents")
+    home = Path.home()
+    bases.append(home / "Documents")
+    bases.append(home / "OneDrive" / "Documents")
+    return bases
+
+
+def get_save_roots(config: GameConfig) -> list[Path]:
+    """该游戏的候选存档根目录：主 %APPDATA% + alt_save_roots（相对 Documents/）。"""
+    roots: list[Path] = []
+    appdata = os.environ.get("APPDATA", "")
+    if appdata:
+        roots.append(Path(appdata) / config.appdata_dir)
+    if config.alt_save_roots:
+        seen_bases: set[Path] = set()
+        for base in _document_bases():
+            if base in seen_bases:
+                continue
+            seen_bases.add(base)
+            roots.extend(base / frag for frag in config.alt_save_roots)
+    return roots
+
+
 def scan_save_folders(config: GameConfig) -> list[tuple[Path, str]]:
-    """扫描游戏的存档目录"""
-    appdata = Path(os.environ.get("APPDATA", "")) / config.appdata_dir
-    if not appdata.exists():
-        return []
+    """扫描游戏的存档目录（遍历全部候选根，合并去重）。"""
     folders: list[tuple[Path, str]] = []
-    for entry in sorted(appdata.iterdir(), key=lambda p: p.name):
-        if entry.is_dir() and is_valid_save_folder_name(entry.name):
-            if list(entry.glob(config.file_ext)):
-                folders.append((entry, entry.name))
+    seen: set[Path] = set()
+    for root in get_save_roots(config):
+        if not root.exists():
+            continue
+        for entry in sorted(root.iterdir(), key=lambda p: p.name):
+            if entry.is_dir() and entry not in seen \
+                    and is_valid_save_folder_name(entry.name):
+                if list(entry.glob(config.file_ext)):
+                    folders.append((entry, entry.name))
+                    seen.add(entry)
     return folders

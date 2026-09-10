@@ -7,20 +7,46 @@
 ## 快速开始
 
 ```bash
-# 完整版（推荐，自动 AES 加解密）
-pip install cryptography
-python fs_save_migrate.py
+# 安装（推荐，含入口命令）
+pip install .
+fs-save-migrator                # 交互式菜单
 
+# 或不安装直接运行（需先 pip install cryptography）
+python fs_save_migrate.py
+```
+
+```bash
 # 如果不想装依赖，自动回退到 PowerShell（仅 Windows，较慢）
 python fs_save_migrate.py
 ```
-> **提示**：工具会自动备份目标文件夹的原存档为 `.bak` 文件，迁移后可手动删除或恢复。
+> **提示**：工具会自动备份目标文件夹的原存档为 `.bak` 文件（该机制不可关闭），迁移后可手动删除或恢复。
+
+### 交互式用法
 
 运行后：
 1. 选择游戏
 2. 选择源存档和目标存档（支持扫描列表或手动输入路径）
 3. 选择转换方向（源→目标 或 目标→源）
 4. 确认，完成
+
+### 命令行用法（非交互）
+
+适合脚本化调用；`--src`/`--dst` 可传存档文件或其所在文件夹：
+
+```bash
+# 预览迁移计划（不写入任何文件）
+fs-save-migrator --game ds3 --src "C:\a\DS30000.sl2" --dst "C:\b\01100001xxx" --dry-run
+
+# 确认执行（--yes 跳过确认；.bak 备份始终自动创建）
+fs-save-migrator --game ds3 --src "C:\a\DS30000.sl2" --dst "C:\b\01100001xxx" --yes
+
+# 反向（目标 → 源）、支持别名 ds3/ds2/dsr/er/sekiro/nr 或 1-6
+fs-save-migrator --game er --src "C:\a" --dst "C:\b" --direction 2 --yes
+```
+
+- 目标文件夹可以是**新建空文件夹**（目标账号尚未生成存档时），SteamID 从文件夹名推导；若目标已有存档则优先从存档内部读取（兼容 `.co2` 等异名备份）
+- 退出码：`0` 成功 / `1` 失败或取消 / `2` 用法错误
+- DSR 的存档在 `Documents\NBGI\DARK SOULS REMASTERED`（含 OneDrive 重定向变体），扫描已自动覆盖，通常无需手动输路径
 
 ---
 
@@ -32,7 +58,7 @@ python fs_save_migrate.py
 |---|------|----------|----------|------|
 | 1 | **Dark Souls III** (黑暗之魂3) | `%APPDATA%\DarkSoulsIII\` | 存档内绑定（patch） | ✅ 已验证 |
 | 2 | **Dark Souls II / SOTFS** (黑暗之魂2) | `%APPDATA%\DarkSoulsII\` | 文件夹名识别（纯复制） | ✅ 已验证 |
-| 3 | **Dark Souls Remastered** (黑暗之魂重制版) | `Documents\NBGI\DARK SOULS REMASTERED\`（**非 %APPDATA%**） | 文件夹名识别（纯复制） | ✅ 已验证 |
+| 3 | **Dark Souls Remastered** (黑暗之魂重制版) | `Documents\NBGI\DARK SOULS REMASTERED\`（**非 %APPDATA%**，工具已自动扫描） | 文件夹名识别（纯复制） | ✅ 已验证 |
 | 4 | **Elden Ring** (艾尔登法环) | `%APPDATA%\EldenRing\` | 存档内绑定（patch） | ✅ 已验证（含黑盒 `.co2` 备份） |
 | 5 | **Sekiro: Shadows Die Twice** (只狼) | `%APPDATA%\Sekiro\` | 存档内绑定（patch） | ✅ 已验证 |
 | 6 | **Elden Ring Nightreign** (黑夜君临) | `%APPDATA%\Nightreign\` | 存档内绑定（patch） | ✅ 已验证 |
