@@ -50,7 +50,12 @@ GAME_CONFIGS: dict[str, GameConfig] = {
         name="Dark Souls II / SOTFS (黑暗之魂2)",
         appdata_dir="DarkSoulsII",
         file_ext="*.sl2",
-        # DS2S(SOTFS) 密钥；原版 DS2 用 B7FD463E4A9C1102DF1739E5F3B2A50F（未验证）
+        # 双密钥已验证（2026-09-11）：
+        #   SOTFS 599F9B69...（下方值）— 本地真实存档实测解出结构化明文，
+        #     社区工具 soarqin/SoulsSaveManager、Hapfel1/er-save-manager 同款
+        #   原版 DS2 B7FD463E4A9C1102DF1739E5F3B2A50F — Atvaark/DarkSoulsII.FileFormats
+        #     README「Savegames」节证实（AES-128-CBC, PC 1.0.7）
+        # 注：本工具对 DS2 走 folder 纯复制，不实际使用密钥，仅供研究/scan 参考
         aes_key_hex="599F9B699640A55236EE2D70835EC744",
         struct_type="md5_iv_ct",
         steam_id_offset=0x08,

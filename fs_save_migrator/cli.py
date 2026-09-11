@@ -372,6 +372,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     """包入口：无 --game 时保持交互式菜单原行为。"""
+    # UTF-8 输出（PyInstaller exe / 管道重定向时防中文乱码；控制台直连时为 no-op）
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+        except Exception:
+            pass
+
     parser = build_parser()
     args = parser.parse_args(argv)
 

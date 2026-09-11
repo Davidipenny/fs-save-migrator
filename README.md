@@ -150,13 +150,15 @@ FromSoftware 自 **Dark Souls II** 起统一用 **BND4 容器** 存储存档，�
 | 游戏 | 封装结构 | AES-128 密钥 | SteamID 偏移 | 文件夹名进制 |
 |------|----------|--------------|--------------|--------------|
 | Dark Souls III | `md5_iv_ct` | `FD464D695E69A39A10E319A7ACE8B7FA` | 0x08（解密后） | 十六进制 SteamID64 |
-| Dark Souls II / SOTFS | `md5_iv_ct` | `599F9B699640A55236EE2D70835EC744`（DS2S） | 不适用（不内部绑定） | 十六进制 SteamID64 |
+| Dark Souls II / SOTFS | `md5_iv_ct` | SOTFS `599F9B699640A55236EE2D70835EC744`；原版 `B7FD463E4A9C1102DF1739E5F3B2A50F`（双密钥均已验证，见下） | 不适用（不内部绑定） | 十六进制 SteamID64 |
 | Dark Souls Remastered | `md5_iv_ct` | `0123456789ABCDEFFEDCBA9876543210` | 不适用（不内部绑定，0x08 处实测为版本字段） | account_id 十进制（= SteamID64 − 0x0110000100000000） |
 | Elden Ring | `plain` | —（明文） | 0x14（原始字节） | 十进制 SteamID64 |
 | Sekiro | `plain` | —（明文） | 0x34（原始字节） | 十进制 SteamID64 |
 | Nightreign | `iv_ct` | `18F6326605BD178A5524523AC0A0C609` | 0x08（解密后） | 十进制 SteamID64 |
 
 SteamID 均为 64 位整数、小端序 8 字节。
+
+> **DS2 双密钥验证（2026-09-11）**：SOTFS 密钥经本地真实存档实测（`USER_DATA_010` 解出结构化明文；社区工具 [SoulsSaveManager](https://github.com/soarqin/SoulsSaveManager) 同款）；原版 DS2 密钥经 [Atvaark/DarkSoulsII.FileFormats](https://github.com/Atvaark/DarkSoulsII.FileFormats) README「Savegames」节证实（AES-128-CBC，PC 1.0.7）。解密后明文**均未发现 SteamID**，与"DS2 不内部绑定 SteamID、靠文件夹名识别"的实测结论一致——本工具对 DS2 走纯复制，不使用密钥。
 
 > **关键认知（踩坑史）**：早期"5 款游戏同密钥同结构共用 0x08"的假设是**错的**——实测各游戏加密方案、密钥、偏移各不相同（DS3 加密、Sekiro/ER 明文、DS2/DSR/NR 各有独立密钥）。新增游戏时以 `GAME_CONFIGS` 为准，勿凭直觉套用。
 
@@ -215,6 +217,35 @@ SteamID 均为 64 位整数、小端序 8 字节。
 
 ---
 
+## 构建与发布
+
+### 本地出单文件 exe（Windows）
+
+```bash
+cd fs-save-migrator
+pip install -e ".[dev]"        # dev 依赖含 pyinstaller
+pyinstaller fs_save_migrator.spec --noconfirm
+# 产物：dist/fs-save-migrator.exe（约 12 MB，免装 Python 直接运行）
+```
+
+> 未签名的 PyInstaller 产物可能被杀软误报，属常见现象；本工具不联网，可自行校验。
+
+### 发布流程（git tag 触发 GitHub Actions）
+
+推送到 GitHub 后，打 tag 即自动跑测试、构建 exe + wheel/sdist 并创建 Release：
+
+```bash
+# 一次性：在 GitHub 建空仓库（不要初始化 README），然后：
+git remote add origin <你的仓库URL>
+git push -u origin main
+
+# 之后每次发布：
+git tag v2.0.0
+git push origin v2.0.0        # → .github/workflows/release.yml 自动出 Release
+```
+
+---
+
 ## 安全说明
 
 ### 软 Ban 风险
@@ -243,4 +274,5 @@ SteamID 均为 64 位整数、小端序 8 字节。
 
 - [SoulsFormats](https://github.com/JKAnderson/SoulsFormats) — FromSoftware 存档格式逆向库
 - [DarkSoulsIII.FileFormats](https://github.com/Atvaark/DarkSoulsIII.FileFormats) — Atvaark 对 BND4 格式的分析
-- AES 密钥 `FD464D695E69A39A10E319A7ACE8B7FA`（DS3）由 [Atvaark](https://github.com/Atvaark) 逆向发现；DS2S / DSR / Nightreign 密钥来自社区公开逆向成果（soulsmods、Keys.cs 等），来源注释见 `fs_save_migrate.py` 的 `GAME_CONFIGS`
+- [DarkSoulsII.FileFormats](https://github.com/Atvaark/DarkSoulsII.FileFormats) — Atvaark 对 DS2 存档加密的分析（原版 DS2 密钥出处）
+- AES 密钥 `FD464D695E69A39A10E319A7ACE8B7FA`（DS3）由 [Atvaark](https://github.com/Atvaark) 逆向发现；DS2S / DSR / Nightreign 密钥来自社区公开逆向成果（soulsmods、Keys.cs 等），来源注释见 `fs_save_migrator/games.py` 的 `GAME_CONFIGS`
