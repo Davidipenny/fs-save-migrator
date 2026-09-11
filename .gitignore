@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# 构建与打包产物
+dist/
+build/
+*.egg-info/
+.venv/
+
+# 测试/工具缓存（pytest basetemp 指向工作区，规避系统 Temp 目录 ACL 问题）
+.pytest_cache/
+.pytest_tmp/
+.ruff_cache/
+.mypy_cache/
