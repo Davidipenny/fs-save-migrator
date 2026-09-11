@@ -41,7 +41,7 @@ dev = [
 fs-save-migrator = "fs_save_migrator.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/Davidipenny/fs存档转换器"
+Homepage = "https://github.com/Davidipenny/fs-save-migrator"
 
 [tool.hatch.build.targets.wheel]
 packages = ["fs_save_migrator"]
